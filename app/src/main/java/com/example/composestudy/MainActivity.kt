@@ -38,8 +38,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.runtime.MutableState
@@ -47,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -65,6 +69,10 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -75,7 +83,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            HomeScreen()
+            val navController = rememberNavController()
+            NavHost(navController = navController, startDestination = "home"){
+                composable(route = "home"){
+                    HomeScreen(navController)
+                }
+                composable(route = "resulut"){
+                    ResultScreen(navController, bmi = 12.0)
+                }
+            }
         }
     }
 }
@@ -83,7 +99,7 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(){
+fun HomeScreen(navController: NavController){
     val (height, setHeight) = rememberSaveable {
         mutableStateOf("")
     }
@@ -122,11 +138,54 @@ fun HomeScreen(){
             )
             Spacer(modifier = Modifier.height(8.dp))
             Button(
-                onClick = {},
+                onClick = {
+                          navController.navigate("resulut")
+                },
                 modifier = Modifier.align(Alignment.End)
             ){
                 Text("결과")
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun ResultScreen(navController: NavController, bmi: Double,){
+    Scaffold(
+        topBar = {
+            TopAppBar(title = {Text("비만도 계산기")},
+            navigationIcon = {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "home",
+                    modifier = Modifier.clickable {
+                        navController.popBackStack()
+                    }
+                )
+            })
+        }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            //Spacer(modifier = Modifier.height(60.dp))
+            Text("과체중", fontSize = 30.sp)
+            Spacer(modifier = Modifier.height(50.dp))
+            Icon(
+                painter = painterResource(id = R.drawable.baseline_sentiment_dissatisfied_24),
+                contentDescription = null,
+                modifier = Modifier.size(100.dp),
+            )
+        }
+    }
+}
+
+@Preview
+@Composable
+fun Preview(){
+
 }

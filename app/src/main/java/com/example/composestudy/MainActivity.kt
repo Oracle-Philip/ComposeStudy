@@ -50,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -74,6 +75,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import java.util.Timer
+import kotlin.concurrent.timer
+
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -83,109 +87,160 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val navController = rememberNavController()
-            NavHost(navController = navController, startDestination = "home"){
-                composable(route = "home"){
-                    HomeScreen(navController)
-                }
-                composable(route = "resulut"){
-                    ResultScreen(navController, bmi = 12.0)
-                }
-            }
-        }
-    }
-}
+            val viewModel = viewModel<MainViewModel>()
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HomeScreen(navController: NavController){
-    val (height, setHeight) = rememberSaveable {
-        mutableStateOf("")
-    }
+            val sec = viewModel.sec.value
+            val milli = viewModel.milli.value
+            val isRunning = viewModel.isRunning.value
+            val lapTimes = viewModel.lapTimes.value
 
-    val (weight, setWeight) = rememberSaveable {
-        mutableStateOf("")
-    }
-
-    Scaffold(
-        // () -> Unit 함수형태이다.
-        topBar = {
-            TopAppBar(
-                title = { Text("비만도 계산기") }
-            )
-        }
-    ) {
-        Column(
-//            modifier = Modifier.padding(PaddingValues(top = 90.dp))
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
-
-            OutlinedTextField(
-                value = height,
-                onValueChange = setHeight,
-                label = { Text("키")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            OutlinedTextField(
-                value = weight,
-                onValueChange = setWeight,
-                label = { Text("몸무게")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                          navController.navigate("resulut")
-                },
-                modifier = Modifier.align(Alignment.End)
-            ){
-                Text("결과")
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@Composable
-fun ResultScreen(navController: NavController, bmi: Double,){
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {Text("비만도 계산기")},
-            navigationIcon = {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "home",
-                    modifier = Modifier.clickable {
-                        navController.popBackStack()
+            MainScreen(
+                sec = sec,
+                milli = milli,
+                isRunning = isRunning,
+                lapTimes = lapTimes,
+                onReset = { viewModel.reset() },
+                onToggle = {running ->
+                    if (running){
+                        viewModel.pause()
+                    } else {
+                        viewModel.start()
                     }
-                )
-            })
+                },
+                onLapTime = { viewModel.recordLabTime()},
+            )
+        }
+    }
+}
+
+class MainViewModel : ViewModel(){
+    private var time = 0
+
+    private var timerTask : Timer? = null
+
+    private val _isRunning = mutableStateOf(false)
+    val isRunning: State<Boolean> = _isRunning
+
+    private val _sec = mutableStateOf(0)
+    val sec: State<Int> = _sec
+
+    private val _milli = mutableStateOf(0)
+    val milli: State<Int> = _milli
+
+    private val _lapTimes = mutableStateOf(mutableListOf<String>())
+    val lapTimes: State<List<String>> = _lapTimes
+
+    private var lap = 1
+
+    fun start(){
+        _isRunning.value = true
+        timerTask = timer(period = 10){
+            time++
+            _sec.value = time / 100
+            _milli.value = time % 100
+        }
+    }
+
+    fun pause(){
+        _isRunning.value = false
+        timerTask?.cancel()
+    }
+
+    fun reset(){
+        timerTask?.cancel()
+        time = 0
+        _isRunning.value = false
+        _sec.value = 0
+        _milli.value = 0
+
+        _lapTimes.value.clear()
+        lap = 1
+    }
+
+    fun recordLabTime(){
+        _lapTimes.value.add(0, "$lap LAP : ${sec.value}.${milli.value}")
+        lap++
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun MainScreen(
+    sec: Int,
+    milli: Int,
+    isRunning: Boolean,
+    lapTimes: List<String>,
+    onReset: () -> Unit,
+    onToggle: (Boolean) -> Unit,
+    onLapTime: () -> Unit,
+){
+    Scaffold(
+        topBar = {
+            TopAppBar(title = {Text("StopWatch")})
         }
     ) {
+        Spacer(modifier = Modifier.height(60.dp))
         Column(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            //Spacer(modifier = Modifier.height(60.dp))
-            Text("과체중", fontSize = 30.sp)
-            Spacer(modifier = Modifier.height(50.dp))
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_sentiment_dissatisfied_24),
-                contentDescription = null,
-                modifier = Modifier.size(100.dp),
-            )
+            Spacer(modifier = Modifier.height(40.dp))
+
+            Row(
+                verticalAlignment = Alignment.Bottom
+            ){
+                Text("$sec", fontSize = 100.sp)
+                Text("$milli")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+            ){
+                lapTimes.forEach { lapTime ->
+                    Text(lapTime)
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                FloatingActionButton(
+                    onClick = { onReset() },
+                    containerColor = Color.Red,
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_refresh_black_24dp),
+                        contentDescription = "reset"
+                    )
+                }
+
+                FloatingActionButton(
+                    onClick = { onToggle(isRunning) },
+                    containerColor = Color.Green,
+                ) {
+                    Image(
+                        painter = painterResource(
+                            id =
+                            if (isRunning) R.drawable.ic_pause_black_24dp
+                            else R.drawable.ic_play_arrow_black_24dp
+                        ),
+                        contentDescription = "reset"
+                    )
+                }
+
+                Button(onClick = { onLapTime() }){
+                    Text("랩 타입")
+                }
+            }
         }
     }
-}
-
-@Preview
-@Composable
-fun Preview(){
-
 }

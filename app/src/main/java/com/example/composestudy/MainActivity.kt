@@ -1,10 +1,22 @@
 package com.example.composestudy
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Application
+import android.content.ContentUris
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
+import android.util.Log
+import android.webkit.PermissionRequest
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.annotation.RequiresApi
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +61,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -62,9 +75,12 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -73,119 +89,194 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberImagePainter
+import com.google.accompanist.pager.ExperimentalPagerApi
+import com.google.accompanist.pager.HorizontalPager
+import com.google.accompanist.pager.HorizontalPagerIndicator
+import com.google.accompanist.pager.calculateCurrentOffsetForPage
+import com.google.accompanist.pager.rememberPagerState
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
+
 
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter",
         "UnusedMaterialScaffoldPaddingParameter"
     )
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
-            val navController = rememberNavController()
-            NavHost(navController = navController, startDestination = "home"){
-                composable(route = "home"){
-                    HomeScreen(navController)
+            val viewModel = viewModel<MainViewModel>()
+            var granted by remember { mutableStateOf(false)}
+            val launcher =
+                rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){ isGranted ->
+                    granted = isGranted
                 }
-                composable(route = "resulut"){
-                    ResultScreen(navController, bmi = 12.0)
+
+            if(Build.VERSION.SDK_INT>= Build.VERSION_CODES.TIRAMISU) {
+                if(ContextCompat.checkSelfPermission(this@MainActivity,
+                        Manifest.permission.READ_MEDIA_IMAGES,)
+                    == PackageManager.PERMISSION_GRANTED){
+                    granted = true
+                }
+            } else{
+                if(ContextCompat.checkSelfPermission(this@MainActivity,
+                        Manifest.permission.READ_EXTERNAL_STORAGE,)
+                    == PackageManager.PERMISSION_GRANTED){
+                    granted = true
                 }
             }
-        }
-    }
-}
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HomeScreen(navController: NavController){
-    val (height, setHeight) = rememberSaveable {
-        mutableStateOf("")
-    }
-
-    val (weight, setWeight) = rememberSaveable {
-        mutableStateOf("")
-    }
-
-    Scaffold(
-        // () -> Unit 함수형태이다.
-        topBar = {
-            TopAppBar(
-                title = { Text("비만도 계산기") }
-            )
-        }
-    ) {
-        Column(
-//            modifier = Modifier.padding(PaddingValues(top = 90.dp))
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
-
-            OutlinedTextField(
-                value = height,
-                onValueChange = setHeight,
-                label = { Text("키")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            OutlinedTextField(
-                value = weight,
-                onValueChange = setWeight,
-                label = { Text("몸무게")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                          navController.navigate("resulut")
-                },
-                modifier = Modifier.align(Alignment.End)
-            ){
-                Text("결과")
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@Composable
-fun ResultScreen(navController: NavController, bmi: Double,){
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {Text("비만도 계산기")},
-            navigationIcon = {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "home",
-                    modifier = Modifier.clickable {
-                        navController.popBackStack()
+            if(granted){
+                //Text("권한 허용 됨")
+                viewModel.fetchPhotos()
+                HomeScreen(photoUris = viewModel.photoUris.value)
+            }else{
+                PermissionRequestScreen {
+                    if(Build.VERSION.SDK_INT>= Build.VERSION_CODES.TIRAMISU) {
+                        launcher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                    } else{
+                        launcher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
                     }
-                )
-            })
-        }
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            //Spacer(modifier = Modifier.height(60.dp))
-            Text("과체중", fontSize = 30.sp)
-            Spacer(modifier = Modifier.height(50.dp))
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_sentiment_dissatisfied_24),
-                contentDescription = null,
-                modifier = Modifier.size(100.dp),
-            )
+                }
+            }
         }
     }
 }
 
-@Preview
-@Composable
-fun Preview(){
+class MainViewModel(application: Application) : AndroidViewModel(application){
+    private val _photoUris = mutableStateOf(emptyList<Uri>())
+    val photoUris: State<List<Uri>> = _photoUris
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun fetchALLPhotos(){
+        val uris = mutableListOf<Uri>()
+
+        getApplication<Application>().contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            null,
+            null,
+            null,
+            "${MediaStore.Images.ImageColumns.DATE_TAKEN} DESC"
+        )?.use {cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+
+            while(cursor.moveToNext()){
+                val id = cursor.getLong(idIndex)
+                val contentUri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    id,
+                )
+
+                uris.add(contentUri)
+            }
+        }
+        _photoUris.value = uris
+        Log.d("MainViewModel", "Fetched URIs: $uris")
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun fetchPhotos() {
+        val uris = mutableListOf<Uri>()
+        getApplication<Application>().contentResolver.query(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            null,
+            null,
+            null,
+            "${MediaStore.Images.ImageColumns.DATE_TAKEN} DESC"
+        )?.use { cursor ->
+            val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+
+            var count = 0
+            while (cursor.moveToNext() && count < 5) { // 최대 5개의 이미지만 로드
+                val id = cursor.getLong(idIndex)
+                val contentUri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    id,
+                )
+
+                uris.add(contentUri)
+                count++ // 이미지 카운트 증가
+            }
+        }
+        _photoUris.value = uris
+    }
 
 }
+
+@Composable
+fun PermissionRequestScreen(onClick: () -> Unit){
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("권한이 허용되지 않았습니다")
+        Button(
+            onClick = onClick
+        ){
+            Text("권한 요청")
+        }
+    }
+}
+
+@OptIn(ExperimentalPagerApi::class)
+@Composable
+fun HomeScreen(photoUris: List<Uri>){
+    val pagerState = rememberPagerState()
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            count = photoUris.size,
+            modifier = Modifier
+                .weight(1f)
+                .padding(16.dp)
+                .fillMaxSize()
+        ) {pageIndex ->
+            Card(
+                modifier = Modifier
+                    .graphicsLayer {
+                        val pageOffset = calculateCurrentOffsetForPage(pageIndex).absoluteValue
+
+                        lerp(
+                            start = 0.85f,
+                            stop = 1f,
+                            fraction = 1f - pageOffset.coerceIn(0f, 1f),
+                        ).also { scale ->
+                            scaleX = scale
+                            scaleY = scale
+                        }
+
+                        alpha = lerp(
+                            start = 0.5f,
+                            stop = 1f,
+                            fraction = 1f - pageOffset.coerceIn(0f, 1f),
+                        )
+                    }
+            ) {
+                Image(
+                    painter = rememberImagePainter(
+                        data = photoUris[pageIndex]
+                    ),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+        HorizontalPagerIndicator(
+            pagerState = pagerState,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(16.dp),
+        )
+    }
+}
+
+private fun lerp(start: Float, stop: Float, fraction: Float): Float =
+    (1 - fraction) * start + fraction * stop

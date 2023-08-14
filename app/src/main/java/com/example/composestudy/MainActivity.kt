@@ -56,19 +56,16 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
-import androidx.navigation.NavController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    private val viewModel by viewModels<MainViewModel>()
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter",
         "UnusedMaterialScaffoldPaddingParameter"
@@ -76,10 +73,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val data = remember {
-                mutableStateOf("Hello")
-            }
-
+            //compose안에서 viewmodel 사용하기
+            val viewModel = viewModel<MainViewModel>()
             Column(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.Center,
@@ -90,7 +85,8 @@ class MainActivity : ComponentActivity() {
                     fontSize = 30.sp
                 )
                 Button(onClick = {
-                    viewModel.data.value = "World"
+                    //viewModel.data.value = "World"
+                    viewModel.changeValue()
                 }){
                     Text("변경")
                 }
@@ -100,6 +96,10 @@ class MainActivity : ComponentActivity() {
 }
 
 class MainViewModel : ViewModel() {
-    val data = mutableStateOf("Hello")
+    private val _data = mutableStateOf("Hello")
+    val data : State<String> = _data
 
+    fun changeValue(){
+        _data.value = "world"
+    }
 }

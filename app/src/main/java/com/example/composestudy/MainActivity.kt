@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -46,16 +47,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.State
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
@@ -76,60 +80,53 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: MainViewModel = viewModel()){
-    val text1 : MutableState<String> = remember {
-        mutableStateOf("Hello World")
+fun HomeScreen(){
+    val (height, setHeight) = rememberSaveable {
+        mutableStateOf("")
     }
 
-    var text2 : String by remember {
-        mutableStateOf("Hello World")
+    val (weight, setWeight) = rememberSaveable {
+        mutableStateOf("")
     }
 
-    val (text : String, setText: (String) -> Unit) = remember {
-        mutableStateOf("Hello World")
-    }
-
-    //observeAsState를 통해 Compose에서 liveData 사용 할 수 있다.
-    //kotlin flow도 Compose에서 제공해준다.
-    val text3 = viewModel.liveData.observeAsState("Hello World")
-
-    Column() {
-        Text("Hello World")
-        Button(onClick = {
-            text1.value = "변경"
-            println(text1.value)
-            text2 = "변경"
-            println(text2)
-            setText("변경")
-            viewModel.changeValue("변경")
-//            println(text)
-        }){
-            Text("클릭")
+    Scaffold(
+        // () -> Unit 함수형태이다.
+        topBar = {
+            TopAppBar(
+                title = { Text("비만도 계산기") }
+            )
         }
-        //recomposition ==> 다시 그려지는 행위..
-        TextField(value = text, onValueChange = setText)
-    }
-}
+    ) {
+        Column(
+//            modifier = Modifier.padding(PaddingValues(top = 90.dp))
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Spacer(modifier = Modifier.height(60.dp))
 
-class MainViewModel: ViewModel(){
-    /**
-     * @Stable
-    interface MutableState<T> : State<T> {
-    override var value: T
-    operator fun component1(): T  ==> getter
-    operator fun component2(): (T) -> Unit  ==> setter
-    }
-     */
-    private val _value : MutableState<String> = mutableStateOf("Hello World")
-    //State:읽기만 가능
-    val value : State<String> = _value
-
-    private val _liveData = MutableLiveData<String>()
-    val liveData: LiveData<String> = _liveData
-
-    fun changeValue(value: String){
-        _value.value = value
+            OutlinedTextField(
+                value = height,
+                onValueChange = setHeight,
+                label = { Text("키")},
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            OutlinedTextField(
+                value = weight,
+                onValueChange = setWeight,
+                label = { Text("몸무게")},
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {},
+                modifier = Modifier.align(Alignment.End)
+            ){
+                Text("결과")
+            }
+        }
     }
 }

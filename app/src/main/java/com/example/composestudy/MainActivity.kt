@@ -74,6 +74,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -83,13 +84,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
+            val viewModel = viewModel<BmiViewModel>()
             val navController = rememberNavController()
+
+            val bmi = viewModel.bmi.value
+
             NavHost(navController = navController, startDestination = "home"){
                 composable(route = "home"){
-                    HomeScreen(navController)
+                    HomeScreen(){
+                        //callback
+                        height, weight -> viewModel.bmiCalculate(height = height, weight = weight)
+                        navController.navigate("result")
+                    }
                 }
-                composable(route = "resulut"){
-                    ResultScreen(navController, bmi = 12.0)
+                composable(route = "result"){
+                    ResultScreen(navController, bmi = bmi)
                 }
             }
         }
@@ -99,7 +108,10 @@ class MainActivity : ComponentActivity() {
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController){
+fun HomeScreen(
+//    navController: NavController,
+    onResultClicked: (Double, Double) -> Unit
+){
     val (height, setHeight) = rememberSaveable {
         mutableStateOf("")
     }
@@ -139,7 +151,10 @@ fun HomeScreen(navController: NavController){
             Spacer(modifier = Modifier.height(8.dp))
             Button(
                 onClick = {
-                          navController.navigate("resulut")
+                    if(height.isNotEmpty() && weight.isNotEmpty()){
+                        onResultClicked(height.toDouble(), weight.toDouble())
+                    }
+//                          navController.navigate("resulut")
                 },
                 modifier = Modifier.align(Alignment.End)
             ){
@@ -153,6 +168,21 @@ fun HomeScreen(navController: NavController){
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun ResultScreen(navController: NavController, bmi: Double,){
+    val text = when{
+        bmi >= 35 -> "고도 비만"
+        bmi >= 30 -> "2단계 비만"
+        bmi >= 25 -> "1단계 비만"
+        bmi >= 23 -> "과체중"
+        bmi >= 18.5 -> "정상"
+        else -> "저체중"
+    }
+
+    val imageRes = when{
+        bmi >= 23 -> R.drawable.baseline_sentiment_very_dissatisfied_24
+        bmi >= 18.5 -> R.drawable.baseline_sentiment_satisfied_24
+        else -> R.drawable.baseline_sentiment_dissatisfied_24
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(title = {Text("비만도 계산기")},
@@ -173,10 +203,10 @@ fun ResultScreen(navController: NavController, bmi: Double,){
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             //Spacer(modifier = Modifier.height(60.dp))
-            Text("과체중", fontSize = 30.sp)
+            Text(text, fontSize = 30.sp)
             Spacer(modifier = Modifier.height(50.dp))
             Icon(
-                painter = painterResource(id = R.drawable.baseline_sentiment_dissatisfied_24),
+                painter = painterResource(id = imageRes),
                 contentDescription = null,
                 modifier = Modifier.size(100.dp),
             )
@@ -184,8 +214,13 @@ fun ResultScreen(navController: NavController, bmi: Double,){
     }
 }
 
-@Preview
-@Composable
-fun Preview(){
+class BmiViewModel : ViewModel(){
+    private val _bmi = mutableStateOf(0.0)
+    val bmi: State<Double> = _bmi
 
+    fun bmiCalculate(
+        height : Double, weight : Double,
+    ){
+        _bmi.value = weight / (height / 100.0).pow(2.0)
+    }
 }

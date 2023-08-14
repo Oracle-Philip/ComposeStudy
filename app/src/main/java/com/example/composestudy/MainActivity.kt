@@ -45,64 +45,44 @@ import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.saveable.rememberSaveable
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            //delegate property by를 사용하면 변수로 바꾼다.
-            //알아서 set, get을 해준다.
-            var isFavorite by rememberSaveable {
-                mutableStateOf(false)
-            }
-            ImageCard(
-                modifier = Modifier.fillMaxWidth(0.5f)
-                    .padding(16.dp),
-                isFavorite = isFavorite,
-            ){
-                favorite ->
-                isFavorite = favorite
-            }
-        }
-    }
-}
+            /**
+             * 구조분해 기법  -> MutableState<String> =
+             * @Stable
+                interface MutableState<T> : State<T> {
+                override var value: T
+                operator fun component1(): T
+                operator fun component2(): (T) -> Unit
+                }
+             */
 
-@Composable
-fun ImageCard(
-    modifier: Modifier = Modifier,
-    isFavorite : Boolean,
-    //callBack
-    onTabFavorite: (Boolean) -> Unit
-){
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(8.dp),
-        elevation = CardDefaults.cardElevation(5.dp)
-    ){
-        Box(
-            modifier = Modifier.height(200.dp)
-        ){
-            Image(
-                painter = painterResource(id = R.drawable.poster),
-                contentDescription = "poster",
-                contentScale = ContentScale.Crop
-            )
-            Box(
+            val (text, setValue) = remember {
+                mutableStateOf("")
+            }
+
+            Column(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopEnd
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
             ){
-                IconButton(onClick = {
-                    //callBack
-                    onTabFavorite(!isFavorite)
-                }){
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "favorite",
-                        tint = Color.White
-                    )
+                TextField(
+                    value = text,
+                    onValueChange = setValue,
+                )
+                Button(onClick = {}){
+                    Text("클릭!!")
                 }
             }
         }

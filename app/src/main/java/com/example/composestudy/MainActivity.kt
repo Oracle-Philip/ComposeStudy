@@ -47,25 +47,36 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.runtime.saveable.rememberSaveable
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ImageCard()
+            //delegate property by를 사용하면 변수로 바꾼다.
+            //알아서 set, get을 해준다.
+            var isFavorite by rememberSaveable {
+                mutableStateOf(false)
+            }
+            ImageCard(
+                isFavorite = isFavorite,
+            ){
+                favorite ->
+                isFavorite = favorite
+            }
         }
     }
 }
 
 @Composable
-fun ImageCard(){
-    //mutableState라는 객체 안에 값이 바뀌는거라서 변수일 필요없이 상수로 해줘도 된다.
-    val isFavorite = remember {
-        mutableStateOf(false)
-    }
-
+fun ImageCard(
+    isFavorite : Boolean,
+    //callBack
+    onTabFavorite: (Boolean) -> Unit
+){
     Card(
-        modifier = Modifier.fillMaxWidth(0.5f)
+        modifier = Modifier
+            .fillMaxWidth(0.5f)
             .padding(16.dp),
         shape = RoundedCornerShape(8.dp),
         elevation = CardDefaults.cardElevation(5.dp)
@@ -83,10 +94,11 @@ fun ImageCard(){
                 contentAlignment = Alignment.TopEnd
             ){
                 IconButton(onClick = {
-                    isFavorite.value = !isFavorite.value
+                    //callBack
+                    onTabFavorite(!isFavorite)
                 }){
                     Icon(
-                        imageVector = if (isFavorite.value) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "favorite",
                         tint = Color.White
                     )

@@ -1,6 +1,9 @@
 package com.example.composestudy
 
 import android.annotation.SuppressLint
+import android.app.Application
+import android.content.pm.ActivityInfo
+import android.media.SoundPool
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -63,8 +66,10 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -76,116 +81,89 @@ import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-    @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
-    @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter",
-        "UnusedMaterialScaffoldPaddingParameter"
-    )
+    private val viewModel by viewModels<MainViewModel>()
     override fun onCreate(savedInstanceState: Bundle?) {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         super.onCreate(savedInstanceState)
         setContent {
-            val navController = rememberNavController()
-            NavHost(navController = navController, startDestination = "home"){
-                composable(route = "home"){
-                    HomeScreen(navController)
-                }
-                composable(route = "resulut"){
-                    ResultScreen(navController, bmi = 12.0)
-                }
-            }
+            XylophoneScreen(viewModel = viewModel)
         }
     }
 }
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
+class MainViewModel(application: Application) : AndroidViewModel(application){
+
+    private val soundPool = SoundPool.Builder().setMaxStreams(8).build()
+
+    private val sounds = listOf(
+        soundPool.load(application.applicationContext, R.raw.do1, 1),
+        soundPool.load(application.applicationContext, R.raw.re, 1),
+        soundPool.load(application.applicationContext, R.raw.mi, 1),
+        soundPool.load(application.applicationContext, R.raw.fa, 1),
+        soundPool.load(application.applicationContext, R.raw.sol, 1),
+        soundPool.load(application.applicationContext, R.raw.la, 1),
+        soundPool.load(application.applicationContext, R.raw.si, 1),
+        soundPool.load(application.applicationContext, R.raw.do2, 1),
+    )
+    fun playSound(index: Int){
+        soundPool.play(sounds[index], 1f, 1f, 0, 0, 1f)
+    }
+
+    override fun onCleared() {
+        soundPool.release()
+        super.onCleared()
+    }
+}
+
 @Composable
-fun HomeScreen(navController: NavController){
-    val (height, setHeight) = rememberSaveable {
-        mutableStateOf("")
-    }
+fun XylophoneScreen(
+    viewModel: MainViewModel
+){
+    val keys = listOf(
+        Pair("도", Color.Red),
+        Pair("레", Color(0XFFFF9800)),
+        Pair("미", Color(0XFFFFC107)),
+        Pair("파", Color(0XFF8BC34A)),
+        Pair("솔", Color(0XFF2196F3)),
+        Pair("라", Color(0XFF3F51B5)),
+        Pair("시", Color(0XFF673AB7)),
+        Pair("도", Color.Red),
+    )
 
-    val (weight, setWeight) = rememberSaveable {
-        mutableStateOf("")
-    }
-
-    Scaffold(
-        // () -> Unit 함수형태이다.
-        topBar = {
-            TopAppBar(
-                title = { Text("비만도 계산기") }
-            )
-        }
-    ) {
-        Column(
-//            modifier = Modifier.padding(PaddingValues(top = 90.dp))
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
-
-            OutlinedTextField(
-                value = height,
-                onValueChange = setHeight,
-                label = { Text("키")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            OutlinedTextField(
-                value = weight,
-                onValueChange = setWeight,
-                label = { Text("몸무게")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(
-                onClick = {
-                          navController.navigate("resulut")
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ){
+        keys.forEachIndexed { index, key ->
+            val padding = (index + 2) * 8 // 16, 24, 32
+            Keyboard(
+                modifier = Modifier
+                .padding(top = padding.dp, bottom = padding.dp)
+                .clickable {
+                   viewModel.playSound(index)
                 },
-                modifier = Modifier.align(Alignment.End)
-            ){
-                Text("결과")
-            }
+                text = key.first,
+                color = key.second,)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
-fun ResultScreen(navController: NavController, bmi: Double,){
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {Text("비만도 계산기")},
-            navigationIcon = {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "home",
-                    modifier = Modifier.clickable {
-                        navController.popBackStack()
-                    }
-                )
-            })
-        }
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            //Spacer(modifier = Modifier.height(60.dp))
-            Text("과체중", fontSize = 30.sp)
-            Spacer(modifier = Modifier.height(50.dp))
-            Icon(
-                painter = painterResource(id = R.drawable.baseline_sentiment_dissatisfied_24),
-                contentDescription = null,
-                modifier = Modifier.size(100.dp),
-            )
-        }
+fun Keyboard(
+    modifier: Modifier,
+    text: String,
+    color : Color
+){
+    Box(
+        modifier = modifier
+            .width(50.dp)
+            .fillMaxHeight()
+            .background(color = color)
+    ){
+        Text(
+            text = text,
+            style = TextStyle(color = Color.White, fontSize = 20.sp),
+            modifier = Modifier.align(Alignment.Center),
+        )
     }
-}
-
-@Preview
-@Composable
-fun Preview(){
-
 }

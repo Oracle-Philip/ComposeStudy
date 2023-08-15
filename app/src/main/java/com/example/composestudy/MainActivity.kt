@@ -1,11 +1,18 @@
 package com.example.composestudy
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Application
+import android.content.pm.PackageManager
+import android.location.Location
 import android.os.Bundle
+import android.os.Looper
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 
 import androidx.compose.foundation.background
@@ -63,6 +70,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.livedata.observeAsState
@@ -70,21 +78,38 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.OnLifecycleEvent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.maps.CameraUpdateFactory
+import com.google.android.gms.maps.MapView
+import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.MarkerOptions
+import com.google.android.gms.maps.model.PolylineOptions
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.lang.IllegalStateException
 
 class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -94,125 +119,148 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val viewModel = viewModel<MainViewModel>()
-            HomeScreen(viewModel)
-        }
-    }
-}
+            var granted by remember { mutableStateOf(false) }
 
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HomeScreen(viewModel: MainViewModel){
-    val focusManger = LocalFocusManager.current
-
-    val (inputUrl, setUrl) = rememberSaveable{
-        mutableStateOf("https://www.google.com")
-    }
-
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(text = "나만의 웹브라우저")},
-                actions = {
-                    IconButton(onClick = {
-                        viewModel.undo()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "back"
-                        )
+            val launcher =
+                rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.RequestPermission(),
+                    onResult = {isGranted ->
+                        granted = isGranted
                     }
+                )
 
-                    IconButton(onClick = {
-                        viewModel.redo()
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "forward"
-                        )
+            if ((ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED)
+            ){
+                granted = true
+            }
+
+            if(granted){
+                val viewModel = viewModel<MainViewModel>()
+                lifecycle.addObserver(viewModel)
+                MyMap(viewModel = viewModel)
+            }else {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("권한이 허용되지 않았습니다.")
+                    Button(onClick = {
+                        launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    }){
+                        Text("권한 요청")
                     }
                 }
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxSize()
-        ) {
-            Spacer(modifier = Modifier.height(60.dp))
-
-            OutlinedTextField(
-                value = inputUrl,
-                onValueChange = setUrl,
-                label = { Text("https://")},
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = {
-                    viewModel.url.value = inputUrl
-                    focusManger.clearFocus()
-                })
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            MyWebView(viewModel = viewModel, snackbarHostState)
+            }
         }
     }
 }
 
+class MainViewModel(application: Application) : AndroidViewModel(application), LifecycleObserver{
+    private val fusedLocationProviderClient =
+        FusedLocationProviderClient(application.applicationContext)
+
+    private val locationRequest : LocationRequest
+    private val locationCallback : MyLocationCallBack
+
+    private val _state = mutableStateOf(MapState(null, PolylineOptions().width(5f).color(android.graphics.Color.RED)))
+    val state : State<MapState> = _state
+
+    init {
+        locationCallback = MyLocationCallBack()
+        locationRequest = LocationRequest.create()
+        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        locationRequest.interval = 10000
+        locationRequest.fastestInterval = 5000
+    }
+
+    @SuppressLint("MissingPermission")
+    @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
+    private fun addLocationListener(){
+        fusedLocationProviderClient.requestLocationUpdates(
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
+        )
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    private fun removeLocationListener(){
+        fusedLocationProviderClient.removeLocationUpdates(locationCallback)
+    }
+
+    inner class MyLocationCallBack : LocationCallback(){
+        override fun onLocationResult(locationResult: LocationResult) {
+            super.onLocationResult(locationResult)
+
+            val location = locationResult.lastLocation
+            val polylineOptions = state.value.polylineOptions
+
+            _state.value = state.value.copy(
+                location = location,
+                polylineOptions = polylineOptions.add(LatLng(location.latitude, location.longitude))
+            )
+        }
+    }
+}
+
+data class MapState(
+    val location : Location?,
+    val polylineOptions: PolylineOptions,
+)
+
 @Composable
-fun MyWebView(
-    viewModel: MainViewModel,
-    snackbarHost : SnackbarHostState,
+fun MyMap(
+    viewModel: MainViewModel
 ){
-    val webView = rememberWebView()
-
-//    LaunchedEffect(key1 = , block = )
-//    LaunchedEffect(true)
-
-    LaunchedEffect(Unit){
-        viewModel.undoSharedFlow.collectLatest {
-            if(webView.canGoBack()){
-                webView.goBack()
-            }else{
-                snackbarHost.showSnackbar("더 이상 뒤로 갈 수 없음")
-            }
-        }
-    }
-
-    LaunchedEffect(Unit){
-        viewModel.redoSharedFlow.collectLatest {
-            if(webView.canGoForward()){
-                webView.goForward()
-            }else{
-                snackbarHost.showSnackbar("더 이상 앞으로 갈 수 없음")
-            }
-        }
-    }
+    val map = rememberMapView()
+    val state = viewModel.state.value
 
     AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { webView },
-        update = {webView ->
-            webView.loadUrl(viewModel.url.value)
+        factory = { map },
+        update = {mapView ->
+            mapView.getMapAsync {googleMap ->
+                state.location?.let{
+                    val latLng = LatLng(it.latitude, it.longitude)
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 17f))
+
+                    googleMap.addPolyline(state.polylineOptions)
+                }
+            }
         }
     )
 }
 
+@SuppressLint("RememberReturnType")
 @Composable
-fun rememberWebView() : WebView{
+fun rememberMapView() : MapView{
     val context = LocalContext.current
-    val webView = remember {
-        WebView(context).apply {
-            settings.javaScriptEnabled = true
-            webViewClient = WebViewClient()
-            loadUrl("https://google.com")
+    val mapView = remember { MapView(context) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(lifecycleOwner){
+        val observer = LifecycleEventObserver { _, event ->
+            when(event){
+                Lifecycle.Event.ON_CREATE -> mapView.onCreate(Bundle())
+                Lifecycle.Event.ON_START -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                else -> throw IllegalStateException()
+            }
+        }
+
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-    return webView
+
+    return mapView
 }

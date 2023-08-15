@@ -7,3 +7,6 @@
 ### **예제로 배우는Jetpack Compose**
 
 이 강의에서는 먼저 Compose의 기초를 익힌 이후 예제를 통해 Compose의 사용법을 배우게 됩니다.
+
+
+https://velog.io/@max9106/IntelliJ-Live-Template
